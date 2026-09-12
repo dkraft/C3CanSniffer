@@ -10,7 +10,7 @@ Board pinout: [ESP32-C3 Super Mini](https://randomnerdtutorials.com/getting-star
 - **Phone:** Serial Bluetooth Terminal, BLE profile **Nordic UART**
 - **Bench flash:** USB-C with 12 V unplugged
 
-BLE cannot dump an unfiltered 500 kbit/s car bus. Firmware defaults to **listen-only** and **diff** (print a frame only when that ID’s payload changes). Filter to one ID for a live stream of a single message.
+BLE cannot dump an unfiltered 500 kbit/s car bus. Firmware defaults to **listen-only** and **classify** (name bytes on the C3, do not log frames). Type an ID to inspect that message.
 
 ## Power
 
@@ -65,19 +65,64 @@ Only one BLE central at a time: quit the phone app before the laptop, and vice v
 
 Same on USB Serial, Bleak stdin, or the phone terminal:
 
+One letter from the phone toggles that sensor’s stream. Two letters are system commands so they never steal a sensor key.
+
 | cmd | effect |
 |---|---|
-| `all` | accept every ID |
-| `0x2E1` / `737` | hardware + software filter to one ID |
-| `50` `125` `250` `500` `800` | kbit/s, re-inits TWAI |
-| `s` | toggle silent / listen-only |
-| `d` | toggle diff mode |
-| `r` | reset counters and diff history |
-| `st` | TEC/REC, queue, drops |
-| `p` | ping (BOOT button on GPIO9 does the same) |
-| `h` | help |
+| `w` | toggle wheel-speed diffs |
+| `s` | toggle steering diffs |
+| `y` | toggle yaw diffs |
+| `g` | toggle GPS diffs |
+| `v` | toggle vehicle-speed diffs |
+| `x` | toggle forward-accel diffs |
+| `h` | toggle heading diffs |
+| `o` | toggle odometer diffs |
+| `l` | toggle lateral-accel diffs |
+| `r` | toggle roll diffs |
+| `z` | toggle vertical / G diffs |
+| `n` | print named sensors |
+| `c` | classify now |
+| `d` | dump all changed frames (BLE will choke on a busy bus) |
+| `si` | silent / listen-only |
+| `rs` | reset counters and names (fresh identify) |
+| `st` | TEC/REC, queue, drops, watches |
+| `p` | ping (BOOT button too) |
+| `?` | help |
+| `all` | classify every ID, no frame dump |
+| `0x2E1` / `737` | lock one ID and dump it |
+| `50` `125` `250` `500` `800` | kbit/s |
 
-Line format:
+### Classify — name IDs on the C3, stream only what you toggle
+
+Boot starts from scratch. The C3 watches the whole bus, does not log frames, and names fields as the car behaves:
+
+1. Byte roles: `STATIC` `COUNTER` `CSUM` `MUX` `ANALOG`
+2. 16-bit analog pairs (the smoother endian)
+3. Vehicle logic: wheels are a cluster of similar 16-bit values; steer is the 16-bit that moves while wheels are quiet; yaw follows steer once moving; GPS is the slow walker that goes both ways; odo only increases
+
+| name | meaning | how it gets named |
+|---|---|---|
+| `W` | wheels | 3–4 similar 16-bit fields, ~10 ms |
+| `S` | steering | moves while wheels are still |
+| `Y` | yaw | sign tracks steer when rolling |
+| `G` | GPS | slow 16/32-bit, not monotonic |
+| `V` | vehicle speed | matches wheel mean |
+| `X` | forward accel | sign tracks wheel accel |
+| `L` | lateral accel | sign tracks steer while moving |
+| `H` | heading | medium-rate angle, not GPS/odo |
+| `O` | odometer | 16-bit, only increases |
+| `R` | roll | leftover IMU-rate signed field |
+| `Z` | vertical / G | stable band, may not exist |
+
+A letter arms a watch even before the name exists. When that field is named and its value changes:
+
+```
+[Y] 2E1  b2=12  00 00 00 0C 00 00 00 C3
+```
+
+Type `n` for the table. `rs` forgets names and starts over.
+
+Line format when dumping:
 
 ```
 123456  2E1       8 00 00 1A F0 00 00 00 00

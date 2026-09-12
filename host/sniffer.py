@@ -95,7 +95,7 @@ async def run(args: argparse.Namespace) -> int:
 
     async with BleakClient(dev, timeout=args.timeout) as client:
         await client.start_notify(NUS_TX, on_tx)
-        log("subscribed. type commands (all, 0x2E1, 500, s, d, r, st, h). Ctrl-C to quit.")
+        log("subscribed. type w s y g … to stream; n names; ? help. Ctrl-C to quit.")
         try:
             async for line in stdin_lines():
                 if not line:
